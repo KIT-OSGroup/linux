@@ -96,9 +96,10 @@ struct occ {
 
 	int powr_sample_time_us;	/* average power sample time */
 	u8 poll_cmd_data;		/* to perform OCC poll command */
-	int (*send_cmd)(struct occ *occ, u8 *cmd);
+	int (*send_cmd)(struct occ *occ, u8 *cmd, size_t len, void *resp,
+			size_t resp_len);
 
-	unsigned long last_update;
+	unsigned long next_update;
 	struct mutex lock;		/* lock OCC access */
 
 	struct device *hwmon;
@@ -106,7 +107,8 @@ struct occ {
 	struct attribute_group group;
 	const struct attribute_group *groups[2];
 
-	int error;                      /* latest transfer error */
+	int error;                      /* final transfer error after retry */
+	int last_error;			/* latest transfer error */
 	unsigned int error_count;       /* number of xfr errors observed */
 	unsigned long last_safe;        /* time OCC entered "safe" state */
 

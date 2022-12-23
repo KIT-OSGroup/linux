@@ -1,10 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Split from ftrace_64.S
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version
- * 2 of the License, or (at your option) any later version.
  */
 
 #include <linux/magic.h>
@@ -45,15 +41,14 @@ _GLOBAL(ftrace_regs_caller)
 
 	/* Save all gprs to pt_regs */
 	SAVE_GPR(0, r1)
-	SAVE_10GPRS(2, r1)
+	SAVE_GPRS(2, 11, r1)
 
 	/* Ok to continue? */
 	lbz	r3, PACA_FTRACE_ENABLED(r13)
 	cmpdi	r3, 0
 	beq	ftrace_no_trace
 
-	SAVE_10GPRS(12, r1)
-	SAVE_10GPRS(22, r1)
+	SAVE_GPRS(12, 31, r1)
 
 	/* Save previous stack pointer (r1) */
 	addi	r8, r1, SWITCH_FRAME_SIZE
@@ -112,10 +107,8 @@ ftrace_regs_call:
 #endif
 
 	/* Restore gprs */
-	REST_GPR(0,r1)
-	REST_10GPRS(2,r1)
-	REST_10GPRS(12,r1)
-	REST_10GPRS(22,r1)
+	REST_GPR(0, r1)
+	REST_GPRS(2, 31, r1)
 
 	/* Restore possibly modified LR */
 	ld	r0, _LINK(r1)
@@ -161,7 +154,7 @@ _GLOBAL(ftrace_caller)
 	stdu	r1, -SWITCH_FRAME_SIZE(r1)
 
 	/* Save all gprs to pt_regs */
-	SAVE_8GPRS(3, r1)
+	SAVE_GPRS(3, 10, r1)
 
 	lbz	r3, PACA_FTRACE_ENABLED(r13)
 	cmpdi	r3, 0
@@ -198,7 +191,7 @@ ftrace_call:
 	mtctr	r3
 
 	/* Restore gprs */
-	REST_8GPRS(3,r1)
+	REST_GPRS(3, 10, r1)
 
 	/* Restore callee's TOC */
 	ld	r2, 24(r1)
@@ -298,6 +291,7 @@ _GLOBAL(ftrace_graph_caller)
 	std	r2, 24(r1)
 	ld	r2, PACATOC(r13)	/* get kernel TOC in r2 */
 
+	addi	r5, r1, 112
 	mfctr	r4		/* ftrace_caller has moved local addr here */
 	std	r4, 40(r1)
 	mflr	r3		/* ftrace_caller has restored LR from stack */

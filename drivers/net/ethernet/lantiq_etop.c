@@ -1,15 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- *   This program is free software; you can redistribute it and/or modify it
- *   under the terms of the GNU General Public License version 2 as published
- *   by the Free Software Foundation.
- *
- *   This program is distributed in the hope that it will be useful,
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU General Public License for more details.
- *
- *   You should have received a copy of the GNU General Public License
- *   along with this program; if not, see <http://www.gnu.org/licenses/>.
  *
  *   Copyright (C) 2011 John Crispin <blogic@openwrt.org>
  */
@@ -476,7 +466,6 @@ ltq_etop_tx(struct sk_buff *skb, struct net_device *dev)
 	len = skb->len < ETH_ZLEN ? ETH_ZLEN : skb->len;
 
 	if ((desc->ctl & (LTQ_DMA_OWN | LTQ_DMA_C)) || ch->skb[ch->dma.desc]) {
-		dev_kfree_skb_any(skb);
 		netdev_err(dev, "tx ring full\n");
 		netif_tx_stop_queue(txq);
 		return NETDEV_TX_BUSY;
@@ -517,13 +506,6 @@ ltq_etop_change_mtu(struct net_device *dev, int new_mtu)
 	spin_unlock_irqrestore(&priv->lock, flags);
 
 	return 0;
-}
-
-static int
-ltq_etop_ioctl(struct net_device *dev, struct ifreq *rq, int cmd)
-{
-	/* TODO: mii-toll reports "No MII transceiver present!." ?!*/
-	return phy_mii_ioctl(dev->phydev, rq, cmd);
 }
 
 static int
@@ -604,7 +586,7 @@ err_hw:
 }
 
 static void
-ltq_etop_tx_timeout(struct net_device *dev)
+ltq_etop_tx_timeout(struct net_device *dev, unsigned int txqueue)
 {
 	int err;
 
@@ -626,7 +608,7 @@ static const struct net_device_ops ltq_eth_netdev_ops = {
 	.ndo_stop = ltq_etop_stop,
 	.ndo_start_xmit = ltq_etop_tx,
 	.ndo_change_mtu = ltq_etop_change_mtu,
-	.ndo_do_ioctl = ltq_etop_ioctl,
+	.ndo_eth_ioctl = phy_do_ioctl,
 	.ndo_set_mac_address = ltq_etop_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
 	.ndo_set_rx_mode = ltq_etop_set_multicast_list,
@@ -659,7 +641,7 @@ ltq_etop_probe(struct platform_device *pdev)
 		goto err_out;
 	}
 
-	ltq_etop_membase = devm_ioremap_nocache(&pdev->dev,
+	ltq_etop_membase = devm_ioremap(&pdev->dev,
 		res->start, resource_size(res));
 	if (!ltq_etop_membase) {
 		dev_err(&pdev->dev, "failed to remap etop engine %d\n",

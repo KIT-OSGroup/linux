@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # (c) 2017 Tobin C. Harding <me@tobin.cc>
-# Licensed under the terms of the GNU GPL License version 2
 #
 # leaking_addresses.pl: Scan the kernel for potential leaking addresses.
 #  - Scans dmesg output.
@@ -455,8 +455,9 @@ sub parse_file
 
 	open my $fh, "<", $file or return;
 	while ( <$fh> ) {
+		chomp;
 		if (may_leak_address($_)) {
-			print $file . ': ' . $_;
+			printf("$file: $_\n");
 		}
 	}
 	close $fh;

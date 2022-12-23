@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /* DataCenter TCP (DCTCP) congestion control.
  *
  * http://simula.stanford.edu/~alizade/Site/DCTCP.html
@@ -33,11 +34,6 @@
  *	Daniel Borkmann <dborkman@redhat.com>
  *	Florian Westphal <fw@strlen.de>
  *	Glenn Judd <glenn.judd@morganstanley.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or (at
- * your option) any later version.
  */
 
 #include <linux/module.h>
@@ -108,8 +104,8 @@ static u32 dctcp_ssthresh(struct sock *sk)
 	struct dctcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	ca->loss_cwnd = tp->snd_cwnd;
-	return max(tp->snd_cwnd - ((tp->snd_cwnd * ca->dctcp_alpha) >> 11U), 2U);
+	ca->loss_cwnd = tcp_snd_cwnd(tp);
+	return max(tcp_snd_cwnd(tp) - ((tcp_snd_cwnd(tp) * ca->dctcp_alpha) >> 11U), 2U);
 }
 
 static void dctcp_update_alpha(struct sock *sk, u32 flags)
@@ -150,8 +146,8 @@ static void dctcp_react_to_loss(struct sock *sk)
 	struct dctcp *ca = inet_csk_ca(sk);
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	ca->loss_cwnd = tp->snd_cwnd;
-	tp->snd_ssthresh = max(tp->snd_cwnd >> 1U, 2U);
+	ca->loss_cwnd = tcp_snd_cwnd(tp);
+	tp->snd_ssthresh = max(tcp_snd_cwnd(tp) >> 1U, 2U);
 }
 
 static void dctcp_state(struct sock *sk, u8 new_state)
@@ -213,8 +209,9 @@ static size_t dctcp_get_info(struct sock *sk, u32 ext, int *attr,
 static u32 dctcp_cwnd_undo(struct sock *sk)
 {
 	const struct dctcp *ca = inet_csk_ca(sk);
+	struct tcp_sock *tp = tcp_sk(sk);
 
-	return max(tcp_sk(sk)->snd_cwnd, ca->loss_cwnd);
+	return max(tcp_snd_cwnd(tp), ca->loss_cwnd);
 }
 
 static struct tcp_congestion_ops dctcp __read_mostly = {

@@ -1,16 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * intel_pmic.c - Intel PMIC operation region driver
  *
  * Copyright (C) 2014 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License version
- * 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/export.h>
@@ -219,31 +211,36 @@ static acpi_status intel_pmic_regs_handler(u32 function,
 		void *handler_context, void *region_context)
 {
 	struct intel_pmic_opregion *opregion = region_context;
-	int result = 0;
+	int result = -EINVAL;
 
-	switch (address) {
-	case 0:
-		return AE_OK;
-	case 1:
-		opregion->ctx.addr |= (*value64 & 0xff) << 8;
-		return AE_OK;
-	case 2:
-		opregion->ctx.addr |= *value64 & 0xff;
-		return AE_OK;
-	case 3:
-		opregion->ctx.val = *value64 & 0xff;
-		return AE_OK;
-	case 4:
-		if (*value64) {
-			result = regmap_write(opregion->regmap, opregion->ctx.addr,
-					      opregion->ctx.val);
-		} else {
-			result = regmap_read(opregion->regmap, opregion->ctx.addr,
-					     &opregion->ctx.val);
-			if (result == 0)
-				*value64 = opregion->ctx.val;
+	if (function == ACPI_WRITE) {
+		switch (address) {
+		case 0:
+			return AE_OK;
+		case 1:
+			opregion->ctx.addr |= (*value64 & 0xff) << 8;
+			return AE_OK;
+		case 2:
+			opregion->ctx.addr |= *value64 & 0xff;
+			return AE_OK;
+		case 3:
+			opregion->ctx.val = *value64 & 0xff;
+			return AE_OK;
+		case 4:
+			if (*value64) {
+				result = regmap_write(opregion->regmap, opregion->ctx.addr,
+						      opregion->ctx.val);
+			} else {
+				result = regmap_read(opregion->regmap, opregion->ctx.addr,
+						     &opregion->ctx.val);
+			}
+			opregion->ctx.addr = 0;
 		}
-		memset(&opregion->ctx, 0x00, sizeof(opregion->ctx));
+	}
+
+	if (function == ACPI_READ && address == 3) {
+		*value64 = opregion->ctx.val;
+		return AE_OK;
 	}
 
 	if (result < 0) {
@@ -260,7 +257,7 @@ int intel_pmic_install_opregion_handler(struct device *dev, acpi_handle handle,
 					struct regmap *regmap,
 					struct intel_pmic_opregion_data *d)
 {
-	acpi_status status;
+	acpi_status status = AE_OK;
 	struct intel_pmic_opregion *opregion;
 	int ret;
 
@@ -278,7 +275,8 @@ int intel_pmic_install_opregion_handler(struct device *dev, acpi_handle handle,
 	opregion->regmap = regmap;
 	opregion->lpat_table = acpi_lpat_get_conversion_table(handle);
 
-	status = acpi_install_address_space_handler(handle,
+	if (d->power_table_count)
+		status = acpi_install_address_space_handler(handle,
 						    PMIC_POWER_OPREGION_ID,
 						    intel_pmic_power_handler,
 						    NULL, opregion);
@@ -287,13 +285,12 @@ int intel_pmic_install_opregion_handler(struct device *dev, acpi_handle handle,
 		goto out_error;
 	}
 
-	status = acpi_install_address_space_handler(handle,
+	if (d->thermal_table_count)
+		status = acpi_install_address_space_handler(handle,
 						    PMIC_THERMAL_OPREGION_ID,
 						    intel_pmic_thermal_handler,
 						    NULL, opregion);
 	if (ACPI_FAILURE(status)) {
-		acpi_remove_address_space_handler(handle, PMIC_POWER_OPREGION_ID,
-						  intel_pmic_power_handler);
 		ret = -ENODEV;
 		goto out_remove_power_handler;
 	}
@@ -311,12 +308,16 @@ int intel_pmic_install_opregion_handler(struct device *dev, acpi_handle handle,
 	return 0;
 
 out_remove_thermal_handler:
-	acpi_remove_address_space_handler(handle, PMIC_THERMAL_OPREGION_ID,
-					  intel_pmic_thermal_handler);
+	if (d->thermal_table_count)
+		acpi_remove_address_space_handler(handle,
+						  PMIC_THERMAL_OPREGION_ID,
+						  intel_pmic_thermal_handler);
 
 out_remove_power_handler:
-	acpi_remove_address_space_handler(handle, PMIC_POWER_OPREGION_ID,
-					  intel_pmic_power_handler);
+	if (d->power_table_count)
+		acpi_remove_address_space_handler(handle,
+						  PMIC_POWER_OPREGION_ID,
+						  intel_pmic_power_handler);
 
 out_error:
 	acpi_lpat_free_conversion_table(opregion->lpat_table);
